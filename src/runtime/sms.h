@@ -112,7 +112,9 @@ typedef struct {
     u32  map_ver;                       /* sube con cada cambio de mapeo (el código generado lo vigilará) */
 } Mapper;
 
-/* VDP (vdp.c): registros, memorias, contadores e interrupciones. El dibujo llega en la fase 3 */
+/* VDP (vdp.c, vdp_render.c): registros, memorias, contadores, interrupciones y la imagen */
+#define FB_W 256
+#define FB_H 240
 typedef struct {
     u8   reg[16];                       /* 0-10; 11-15 no tienen efecto */
     u16  addr;                          /* registro de dirección (14 bits) */
@@ -121,17 +123,24 @@ typedef struct {
     u8   first;                         /* ese primer byte */
     u8   buffer;                        /* búfer de lectura del puerto de datos */
     u8   status;                        /* bits 7-5: INT (cuadro), OVR (desborde de sprites), COL (colisión) */
+    u8   vint;                          /* interrupción de cuadro pendiente (su línea INT sube unos ciclos después que la bandera) */
     u8   line_irq;                      /* interrupción de línea pendiente */
+
     u8   line_counter;                  /* contador de la interrupción de línea */
     u8   cram_latch;                    /* Game Gear: el byte par de la CRAM, que se escribe con el impar */
     u8   hcount;                        /* contador H latcheado (cuando cambia TH) */
     u8   frame_done;                    /* terminó un cuadro (lo borra quien corre el cuadro) */
-    u16  height;                        /* líneas activas del cuadro: 192, 224 o 240 */
+    u16  height;                        /* líneas activas del cuadro: 192, 224 o 240 (en el GG en modo GG, siempre 192) */
+    u8   vscroll;                       /* el registro 9 al empezar el cuadro (no cambia durante la imagen) */
     int  line;                          /* línea actual (0-261) */
-    u64  line_start;                    /* ciclo del Z80 en que empezó la línea actual */
+    u64  line_start;                    /* ciclo del Z80 en que empezó la línea actual (cuando cambió el contador V) */
+    u64  next_event;                    /* el próximo ciclo en que el VDP tiene algo que hacer */
+    u64  col_at;                        /* ciclo en que se verá la colisión de sprites de esta línea (0: ninguna) */
+    u64  vint_at, lint_at;              /* ciclos en que subirán la interrupción de cuadro y la de línea (0: ninguna) */
     u64  frame;                         /* cuadros terminados */
     u8   vram[0x4000];
     u8   cram[64];                      /* SMS: 32 bytes --BBGGRR; Game Gear: 32 palabras ----BBBBGGGGRRRR (little-endian) */
+    u16  fb[FB_W * FB_H];               /* la imagen: el color de cada pixel en 12 bits (----BBBBGGGGRRRR) */
 } Vdp;
 
 /* Puertos de E/S que no son del VDP (io.c) */
@@ -207,6 +216,12 @@ void vdp_write(Sms *g, u8 port, u8 v);          /* $80-$BF */
 void vdp_sync(Sms *g, u64 cyc);                 /* líneas, contadores e interrupciones hasta el ciclo cyc */
 void vdp_latch_h(Sms *g, u64 cyc);              /* TH cambió: congela el contador H */
 u8   vdp_vcount(const Vdp *v);                  /* el contador V de la línea actual */
+void vdp_render_line(Sms *g, int y);            /* dibuja la línea y en fb (vdp_render.c) */
+void vdp_border_sprites(Sms *g, int vcount);    /* en una línea fuera de la imagen, solo la colisión de sprites */
+u32  vdp_pixel_cycle(int x);                    /* ciclo de la línea en que se dibuja el pixel x */
+int  vdp_extended(const Vdp *v);                /* la tabla de nombres de 32×32 (los modos de 224 y 240 líneas) */
+uint32_t vdp_argb(u16 c);                       /* un pixel de fb en ARGB 8888 */
+void vdp_view(const Sms *g, int *x0, int *y0, int *w, int *h);  /* lo que se ve: 256×192 (o 224) o la ventana de 160×144 del GG */
 
 /* Después de cada instrucción (el intérprete y el código generado): el VDP solo si empezó una línea */
 #if defined(__GNUC__) || defined(__clang__)
@@ -217,7 +232,7 @@ u8   vdp_vcount(const Vdp *v);                  /* el contador V de la línea ac
 
 SMS_INL void sms_after_step(Sms *g)
 {
-    if (g->cyc >= g->vdp.line_start + (u64)(MCLK_PER_LINE / MCLK_PER_Z80)) vdp_sync(g, g->cyc);
+    if (g->cyc >= g->vdp.next_event) vdp_sync(g, g->cyc);
 }
 
 #endif
