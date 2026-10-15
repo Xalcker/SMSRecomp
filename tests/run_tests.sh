@@ -1,5 +1,5 @@
 #!/bin/sh
-# Batería de make test. Crece con cada fase (docs/PLAN.md): por ahora el cartucho y el Z80.
+# Batería de make test. Crece con cada fase (docs/PLAN.md): el cartucho, el Z80, el bus, la E/S y el VDP sin el dibujo.
 cd "$(dirname "$0")/.." || exit 2
 exe() { if [ -x "./$1.exe" ]; then echo "./$1.exe"; else echo "./$1"; fi; }
 fallas=0
@@ -9,12 +9,20 @@ corre() {   # descripción comando...
 }
 # Segundos de cada sección (para ver qué pesa en el CI; GENRecomp#5)
 T0=$(date +%s); TS=$T0
+mkdir -p build/tests
 tiempo() { t=$(date +%s); echo "      ($1: $((t - TS)) s)"; TS=$t; }
 
 corre "carttest (cabeceras TMR SEGA, Codemasters y SDSC, copiador, mapper, modelo, CRC32)" "$(exe carttest)"
 corre "z80test --int (interrupción desde un HALT en modos 1 y 2, RETI)" "$(exe z80test)" --int
 corre "z80test --nmi (NMI, salida del HALT, RETN, INT en modo 1)" "$(exe z80test)" --nmi
+corre "bustest (memoria, mappers Sega y Codemasters, RAM del cartucho, puertos del SMS y del GG, VDP, contadores, interrupciones, Pausa)" "$(exe bustest)"
 tiempo "pruebas unitarias"
+
+# Estados guardados, con el homebrew (make testroms)
+for r in testroms/homebrew/waternet.sms testroms/homebrew/waternet.gg testroms/homebrew/dragon_blaster.sms; do
+    [ -f "$r" ] && corre "statetest con $(basename "$r")" "$(exe statetest)" "$r" 300 300
+done
+tiempo "estados guardados"
 
 # Z80: SingleStepTests (make testroms), por el intérprete y por el camino del código generado (z80_ops.h con
 # los bytes de la instrucción; también el ciclo del acceso a cada puerto); en los dos, el decodificador
@@ -27,6 +35,31 @@ else
     echo "(sin testroms/z80 se omiten las SingleStepTests del Z80: make testroms)"
 fi
 tiempo "SingleStepTests del Z80 (intérprete y --recomp)"
+
+# ZEXDOC y ZEXALL (make testroms): el ejercitador de instrucciones de Frank Cringle, en el Master System. Corre
+# ~1,5 horas de consola (unos 330 000 cuadros) y deja su resultado en la RAM del cartucho: «Tests complete», sin
+# «ERROR», y las 79 pruebas en «OK». Las dos a la vez
+if [ -f testroms/zexall/zexall.sms ]; then
+    for t in zexdoc zexall; do "$(exe smsrun)" testroms/zexall/$t.sms --frames 345000 --sram-text > build/tests/$t.out 2>&1 & done
+    wait
+    for t in zexdoc zexall; do
+        ok=$(sed -n '/^texto de la RAM/,$p' build/tests/$t.out | grep -c " OK$")
+        if grep -q "Tests complete" build/tests/$t.out && ! grep -q "ERROR" build/tests/$t.out && [ "$ok" -eq 79 ]; then
+            echo "ok    $t: las 79 pruebas del Z80 en OK"
+        else echo "FALLA $t ($ok en OK)"; grep "ERROR" build/tests/$t.out | head -5; fallas=$((fallas + 1)); fi
+    done
+fi
+tiempo "ZEXDOC y ZEXALL"
+
+# El homebrew enciende la pantalla y atiende una interrupción de cuadro por cuadro (600 cuadros, con Start y A)
+for r in testroms/homebrew/*.sms testroms/homebrew/*.gg; do
+    [ -f "$r" ] || continue
+    o=$("$(exe smsrun)" "$r" --frames 600 start:120-125 a:300-305 2>&1)
+    n=$(echo "$o" | sed -n 's/^interrupciones: *\([0-9]*\).*/\1/p')
+    if echo "$o" | grep -q "pantalla encendida" && [ "${n:-0}" -ge 580 ]; then echo "ok    $(basename "$r"): pantalla encendida, $n interrupciones en 600 cuadros"
+    else echo "FALLA $(basename "$r")"; echo "$o" | head -8; fallas=$((fallas + 1)); fi
+done
+tiempo "homebrew"
 
 # smsrecomp: un archivo que no puede ser una ROM debe fallar sin caerse, y sin ROM, dar el uso
 S="$(exe smsrecomp)"
