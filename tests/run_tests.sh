@@ -92,10 +92,16 @@ info testroms/homebrew/waternet.gg fd56a237586a20cf3ceea9e3fac20d0a9eae77cf "Seg
 info testroms/homebrew/dragon_blaster.sms d1c1da577dd14178366245bc55de7d39da839086 "sin mapper" "gg (Game Gear, en su modo SMS)" --model gg
 tiempo "smsrecomp --info"
 
-# Las ROMs de roms/ (tuyas, no se versionan): smsrecomp --info no debe fallar con ninguna
-for r in roms/*.sms roms/*.gg; do
+# Las ROMs de roms/ y de sus subcarpetas (tuyas, no se versionan): smsrecomp --info no debe fallar con ninguna, y
+# cada una, en 1200 cuadros con Start, enciende la pantalla y atiende al menos una interrupción cada dos cuadros (al
+# principio, mientras cargan, muchos juegos las apagan un rato)
+for r in roms/*.sms roms/*.gg roms/*/*.sms roms/*/*.gg; do
     [ -f "$r" ] || continue
     corre "smsrecomp --info $(basename "$r")" "$S" "$r" --info
+    o=$("$(exe smsrun)" "$r" --frames 1200 start:120-125 start:300-305 2>&1)
+    n=$(echo "$o" | sed -n 's/^interrupciones: *\([0-9]*\).*/\1/p')
+    if echo "$o" | grep -q "pantalla encendida" && [ "${n:-0}" -ge 600 ]; then echo "ok    $(basename "$r"): pantalla encendida, $n interrupciones en 1200 cuadros"
+    else echo "FALLA $(basename "$r")"; echo "$o" | head -8; fallas=$((fallas + 1)); fi
 done
 tiempo "ROMs de roms/"
 

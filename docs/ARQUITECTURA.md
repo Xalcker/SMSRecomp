@@ -273,7 +273,7 @@ de `tools/retrorecomp/shared`), en español e inglés.
   SingleStepTests del Z80 por los dos caminos, ZEXDOC y ZEXALL completos (unos 330 000 cuadros cada uno; corren a la
   vez, ~30 s), el homebrew con `smsrun` (pantalla encendida y una interrupción por cuadro), `smsrecomp` con un
   archivo que no es ROM, sin argumentos y con un modelo desconocido, `smsrecomp --info` con las ROMs de prueba
-  (SHA1, suma, mapper y modelo) y con cada ROM de `roms/`.
+  (SHA1, suma, mapper y modelo) y con cada ROM de `roms/` y de sus subcarpetas (también 1200 cuadros con `smsrun`).
 - **`smsrun rom [--frames N] [--model sms|gg] [--watch DIR] [--sram ARCHIVO] [--sram-text] [--sdsc]
   [boton:desde-hasta]`:** el diagnóstico, como `genrun`: corre sin ventana y resume ciclos, interrupciones, el
   mapeo, el VDP y los PC más frecuentes del último cuadro (los bucles de espera); `--watch` avisa cuando cambia un
@@ -301,7 +301,12 @@ de `tools/retrorecomp/shared`), en español e inglés.
 - **Z80 con el bus:** ZEXDOC y ZEXALL, sus 79 pruebas en OK.
 - **Estados guardados:** `statetest` con Waternet (SMS y GG) y Dragon Blaster.
 - **Juegos:** los cinco homebrew de `make testroms` encienden la pantalla y atienden una interrupción por cuadro
-  (y las de línea los que las usan).
+  (y las de línea los que las usan). Con los juegos de `roms/` (y sus subcarpetas, si están): `smsrecomp --info` y
+  1200 cuadros con Start en los que encienden la pantalla y atienden al menos una interrupción cada dos cuadros.
+  Probado con 15 de EE. UU.: Alex Kidd in Miracle World, Ghost House, OutRun, Phantasy Star, Sonic the Hedgehog,
+  Space Harrier, Teddy Boy, TransBot y Wonder Boy III (SMS); Columns, Micro Machines (Codemasters), Shining Force:
+  The Sword of Hajya, Shinobi, Sonic Chaos y Sonic the Hedgehog (GG). Phantasy Star y Shining Force guardan su
+  partida en la RAM del cartucho y la vuelven a cargar (`smsrun --sram`).
 
 **Todavía no:** todo lo demás (ver [PLAN.md](PLAN.md)).
 

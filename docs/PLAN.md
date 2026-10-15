@@ -188,8 +188,12 @@ tabla de botones del SMS/GG en `player_touch.h`), `web/`, `android/`, `contract.
   (`Z80_IO_AT`); la Pausa por NMI. Estados guardados. `bustest` (con programas de Z80 hechos en la prueba),
   `statetest`, `smsrun` (`--watch`, `--sram`, `--sram-text`, `--sdsc`). **Meta:** ZEXDOC y ZEXALL pasan sus 79
   pruebas (en `make test`, ~30 s); los cinco homebrew de `make testroms` encienden la pantalla y atienden una
-  interrupción por cuadro. Pendiente: probarlo con juegos comerciales (no hay ROMs en `roms/` todavía) y calibrar en
-  qué punto de la línea pasa cada evento del VDP con el VDPTEST de FluBBa (fase 3) y los oráculos (fase 4).
+  interrupción por cuadro. Con 15 juegos comerciales de EE. UU. (9 de SMS y 6 de GG, del autor, en `roms/`): todos se
+  reconocen bien (mapper Sega, Codemasters o ninguno; región; modelo), corren 1800 cuadros llenando la VRAM y la
+  CRAM y atienden sus interrupciones (OutRun, Space Harrier, TransBot y Columns, también las de línea); Phantasy Star
+  y Shining Force guardan y vuelven a cargar su partida. Micro Machines del GG usa 224 líneas (para la ventana del GG
+  en la fase 3). Los juegos del GG no traen suma en la cabecera (`$0000`). Pendiente: calibrar en qué punto de la
+  línea pasa cada evento del VDP con el VDPTEST de FluBBa (fase 3) y los oráculos (fase 4).
 - [ ] **3. VDP, sonido y la ventana.** Modo 4 completo (mosaicos, prioridad, sprites con su límite de 8, zoom,
   desborde y colisión, columna izquierda en blanco, bloqueo del scroll, 224 líneas) y lo mínimo de los modos
   TMS9918 (modo 2 para los pocos juegos que lo usan); el GG (CRAM de 12 bits con latch, la ventana de 160×144, el
