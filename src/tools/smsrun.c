@@ -4,7 +4,7 @@
  * espera). Sirve para ver hasta dónde llega un juego mientras falta el resto de la consola, como genrun.
  *
  *   smsrun rom.sms [--frames N] [--model sms|gg] [--watch DIR ...] [--sram ARCHIVO] [--sram-text] [--sdsc]
- *                  [--shot ARCHIVO.png] [--shots CARPETA [--every N]] [boton:desde-hasta ...]
+ *                  [--shot ARCHIVO.png] [--shots CARPETA [--every N]] [--wav ARCHIVO.wav] [boton:desde-hasta ...]
  *
  * Botones: up down left right a b start pause (los cuadros en que se mantienen).
  * --watch DIR (hexadecimal, en la RAM: $C000-$DFFF) imprime el byte cada vez que cambia.
@@ -13,6 +13,7 @@
  * --sdsc imprime lo que el juego escribe en la consola de depuración SDSC (puerto $FD, solo emuladores).
  * --shot ARCHIVO.png guarda la imagen del último cuadro; --shots CARPETA --every N, una cada N cuadros (600). Es lo
  * que se ve: 256×192 (o 224) en el Master System y la ventana de 160×144 en el Game Gear en modo GG.
+ * --wav ARCHIVO.wav guarda el sonido (estéreo, 44 100 Hz, 16 bits) y dice su nivel por segundo.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -21,6 +22,8 @@
 #include "romload.h"
 #include "console.h"
 #include "png.h"
+#include "wav.h"
+#include <math.h>
 
 /* La imagen del cuadro, lo que se ve, como PNG */
 static int save_frame(const Sms *g, const char *path)
@@ -65,7 +68,7 @@ int main(int argc, char **argv)
 {
     console_utf8();
     static const char *const names[8] = { "up", "down", "left", "right", "a", "b", "start", "pause" };
-    const char *rom = NULL, *sram = NULL, *shot = NULL, *shots = NULL;
+    const char *rom = NULL, *sram = NULL, *shot = NULL, *shots = NULL, *wav = NULL;
     long frames = 600, every = 600;
     int model = MODEL_AUTO, sram_text = 0, sdsc = 0;
     unsigned watch[16];
@@ -83,6 +86,7 @@ int main(int argc, char **argv)
         else if (!strcmp(argv[i], "--shot") && i + 1 < argc) shot = argv[++i];
         else if (!strcmp(argv[i], "--shots") && i + 1 < argc) shots = argv[++i];
         else if (!strcmp(argv[i], "--every") && i + 1 < argc) every = atol(argv[++i]);
+        else if (!strcmp(argv[i], "--wav") && i + 1 < argc) wav = argv[++i];
         else if (strchr(argv[i], ':') && argv[i][0] != '-' && nh < 64) {
             char name[16];
             long a, b;
@@ -96,7 +100,7 @@ int main(int argc, char **argv)
     }
     if (!rom) {
         fprintf(stderr, "uso: smsrun rom.sms [--frames N] [--model sms|gg] [--watch DIR ...] [--sram ARCHIVO] [--sram-text] [--sdsc]\n"
-                        "                    [--shot ARCHIVO.png] [--shots CARPETA [--every N]]\n"
+                        "                    [--shot ARCHIVO.png] [--shots CARPETA [--every N]] [--wav ARCHIVO.wav]\n"
                         "                    [boton:desde-hasta ...]   (botones: up down left right a b start pause)\n");
         return 2;
     }
@@ -104,6 +108,15 @@ int main(int argc, char **argv)
     if (!g) return 1;
     if (sdsc) g->sdsc_out = sdsc_print;
     if (sram && sms_sram_load(g, sram)) printf("partida cargada de %s\n", sram);
+    FILE *wf = NULL;
+    uint32_t wav_bytes = 0;
+    double sec_sum = 0;
+    long sec_n = 0, sec = 0;
+    if (wav) {
+        wf = fopen(wav, "wb");
+        if (!wf) { fprintf(stderr, "no se pudo crear %s\n", wav); return 1; }
+        wav_put_header(wf, AUDIO_RATE, 2, 0);
+    }
     u8 wlast[16];
     for (int i = 0; i < nwatch; i++) wlast[i] = g->ram[watch[i]];
     for (long f = 0; f < frames; f++) {
@@ -114,6 +127,18 @@ int main(int argc, char **argv)
             sms_frame_begin(g);
             while (!g->vdp.frame_done) { hist_add(g->z80.pc); sms_step(g); }
         } else sms_run_frame(g);
+        if (wf) {
+            static int16_t snd[AUDIO_BINS * 2];
+            int n = sms_audio_take(g, snd, AUDIO_BINS);
+            fwrite(snd, 4, (size_t)n, wf);
+            wav_bytes += (uint32_t)n * 4;
+            for (int k = 0; k < n * 2; k++) sec_sum += (double)snd[k] * snd[k];
+            sec_n += n * 2;
+            if (sec_n >= AUDIO_RATE * 2) {
+                printf("audio, segundo %3ld: nivel %5.0f\n", sec++, sqrt(sec_sum / (double)sec_n));
+                sec_sum = 0; sec_n = 0;
+            }
+        } else g->audio.n = 0;
         if (shots && every > 0 && (f + 1) % every == 0) {
             char path[1024];
             snprintf(path, sizeof path, "%s/%06ld.png", shots, f + 1);
@@ -160,6 +185,11 @@ int main(int argc, char **argv)
             else if (ch >= 32 && ch < 127) { putchar(ch); col++; }
         }
         if (col) putchar('\n');
+    }
+    if (wf) {
+        wav_put_header(wf, AUDIO_RATE, 2, wav_bytes);
+        fclose(wf);
+        printf("sonido en %s (%.1f s)\n", wav, wav_bytes / 4.0 / AUDIO_RATE);
     }
     if (shot) {
         int x0, y0, w, h;

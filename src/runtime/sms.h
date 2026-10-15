@@ -1,8 +1,8 @@
 /*
  * SMSRecomp: estado de la consola y su interfaz (Sega Master System II y Game Gear de EE. UU., NTSC).
- * Cartucho (formatos, cabeceras TMR SEGA, Codemasters y SDSC, mappers, RAM del cartucho), Z80 (común,
- * tools/retrorecomp/shared), mapa de memoria y puertos, mandos y el VDP sin el dibujo (registros, VRAM,
- * CRAM, contadores e interrupciones). El dibujo y el PSG llegan en la fase 3 (docs/PLAN.md).
+ * Cartucho (formatos, cabeceras TMR SEGA, Codemasters y SDSC, mappers, RAM del cartucho), Z80 y PSG (comunes,
+ * tools/retrorecomp/shared), mapa de memoria y puertos, mandos, el VDP (registros, VRAM, CRAM, contadores,
+ * interrupciones y el dibujo) y la mezcla del sonido.
  */
 #ifndef SMS_H
 #define SMS_H
@@ -11,6 +11,8 @@
 #include <stdint.h>
 
 #include "z80.h"
+#include "psg.h"
+#include "audio.h"
 
 typedef uint8_t  u8;
 typedef uint16_t u16;
@@ -148,7 +150,6 @@ typedef struct {
     u8   mem_ctrl;                      /* $3E: control de memoria */
     u8   io_ctrl;                       /* $3F: control de E/S (TH y TR de los dos puertos) */
     u8   gg[7];                         /* Game Gear, $00-$06: Start y región, el puerto de enlace y el estéreo */
-    u8   psg_last;                      /* lo último escrito al PSG (el sonido llega en la fase 3) */
     u8   pause_prev;                    /* la Pausa (o Start del GG en modo SMS) en el cuadro anterior: la NMI va por flanco */
 } Io;
 
@@ -160,6 +161,8 @@ typedef struct Sms {
     Mapper map;
     Vdp  vdp;
     Io   io;
+    Psg  psg;                           /* el SN76489 (común con GENRecomp: tools/retrorecomp/shared/psg.c) */
+    Audio audio;                        /* la mezcla a 44 100 Hz (audio.c, común). Bits de mute: 0-3 los canales del PSG */
     int  model;                         /* MODEL_SMS o MODEL_GG */
     int  sms_mode;                      /* el juego corre en el modo SMS (siempre en el SMS; en el GG, un cartucho de SMS) */
     u8   pad[2];                        /* botones apretados (SMS_*) de los mandos 1 y 2 */
@@ -183,6 +186,12 @@ int  sms_sram_dirty(const Sms *g);
 /* Estados guardados: la consola entera. Solo los lee la misma versión con la misma ROM. */
 u8  *sms_state_save(const Sms *g, size_t *size);   /* malloc; NULL si falla */
 int  sms_state_load(Sms *g, const u8 *data, size_t size);  /* 1 si se cargó */
+
+/* Sonido (psg.c y audio.c, comunes). Los tiempos son ciclos maestros */
+void audio_reset(Sms *g);
+void audio_add(Sms *g, u64 t0, u64 t1, float l, float r);  /* un tramo constante de un chip */
+void audio_end_frame(Sms *g);                   /* lleva el PSG al final del cuadro y suelta las muestras */
+int  sms_audio_take(Sms *g, int16_t *out, int max_frames);  /* muestras L R; devuelve cuántos pares */
 
 /* Modelos: "sms" y "gg" */
 const char *model_name(int model);

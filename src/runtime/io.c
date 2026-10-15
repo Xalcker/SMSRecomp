@@ -78,6 +78,7 @@ void io_write(Sms *g, u8 port, u8 v)
 {
     Io *io = &g->io;
     if (g->model == MODEL_GG && !g->sms_mode && port <= 0x06) {
+        if (port == 6) psg_run(g, g->io_cyc * MCLK_PER_Z80);   /* el estéreo cambia desde aquí */
         if (port) io->gg[port] = v;                         /* $00 es de solo lectura */
         return;
     }

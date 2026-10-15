@@ -157,8 +157,9 @@ static void ports(void)
     z80_out(&g, 0x3E, 0xAF);           /* la E/S apagada */
     CHECK(z80_in(&g, 0xDC) == 0xFF && g.io.mem_ctrl == 0xAF, "con la E/S apagada");
     z80_out(&g, 0x3E, 0xAB);
-    z80_out(&g, 0x7F, 0x9F);           /* PSG */
-    CHECK(g.io.psg_last == 0x9F, "la escritura al PSG");
+    z80_out(&g, 0x7F, 0x9A);           /* PSG: volumen del tono 0 en 10 (en un espejo) */
+    z80_out(&g, 0x41, 0xE5);           /* ruido */
+    CHECK(g.psg.vol[0] == 10 && g.psg.period[3] == 5, "las escrituras al PSG por $7F y $41");
     sms_free(&g);
     /* Game Gear */
     load(&g, r, 2 * PAGE_SIZE, "p.gg", MODEL_AUTO);
