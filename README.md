@@ -1,3 +1,5 @@
+> **Este repositorio está archivado.** SMSRecomp sigue en [Xalcker/retrorecomp](https://github.com/Xalcker/retrorecomp), en la carpeta [`sms/`](https://github.com/Xalcker/retrorecomp/tree/main/sms), con toda su historia. Las issues abiertas se transfirieron allí (etiqueta `sys:sms`).
+
 # SMSRecomp
 
 Recompilador estático de juegos de Sega Master System y Game Gear (EE. UU., NTSC), con la misma arquitectura que
